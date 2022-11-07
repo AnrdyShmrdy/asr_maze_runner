@@ -6,3 +6,4 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Int32
 from sensor_msgs.msg import LaserScan
+from unitysim.msg import BoundingBox3d
