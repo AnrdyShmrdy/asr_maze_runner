@@ -1,4 +1,4 @@
 <launch>
-    <node name="unity_node" pkg="unitysim" type="spawnrobot.py" output="screen"/>
+    <node name="unity_node" pkg="unitysim" type="spawnrobot.py"/>
     <node name="run_robot" pkg="asr_maze_runner" type="run_robot.py" output="screen" launch-prefix="$(find asr_maze_runner)/launch/call_unity_service.sh"/>
 </launch>
