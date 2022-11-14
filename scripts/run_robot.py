@@ -12,10 +12,7 @@ def clamp(value, low=-1.0, high=1.0):
     return min(max(value, low), high)
 class RobotController:
     def __init__(self):
-        # self.cmd_vel_sub = rospy.Subscriber("/ponce/cmd_vel", Twist, self.cmd_vel_callback)
-        # self.cmd_vel_pub = rospy.Publisher("/ponce/cmd_vel", Twist, queue_size=10)
-        # self.healthfinder_sub = rospy.Subscriber("/ponce/healthfinder", BoundingBox3d, self.healthfinder_callback)
-        # self.scan_sub = rospy.Subscriber("/ponce/scan", LaserScan, self.scan_callback)
+        self.healthfinder_sub = rospy.Subscriber("/ponce/healthfinder", BoundingBox3d, self.healthfinder_callback)
         # self.odom_sub = rospy.Subscriber("/ponce/odom", Odometry, self.odom_callback)
         self.cmd_vel_pub = rospy.Publisher("/ponce/cmd_vel", Twist, queue_size=10)
         self.scan_sub = rospy.Subscriber("/ponce/scan", LaserScan, self.scan_callback)
@@ -38,6 +35,10 @@ class RobotController:
         self.angle_min = None #will be set once node is initialized
         self.range_max = None #will be set once node is initialized
         self.ranges = None #will be set once node is initialized
+        self.healthfinder_msg = BoundingBox3d()
+        self.center_pos_y = 0.0
+        self.size_y = 0.0
+        self.time = time.time()
     def initialize_runtime_variables(self, msg):
         #variables to set once the node is initialized
         #The reason these variables cannot be set in the constructor is because
@@ -59,6 +60,9 @@ class RobotController:
             self.initialize_runtime_variables(msg)
             self.is_initialized = True
         self.ranges = msg.ranges
+    def healthfinder_callback(self, msg):
+        self.time = time.time()
+        self.healthfinder_msg = msg
     def get_angle_from_index(self, pos):
         #return the angle (in radians) for the laser at the specified index in laser_msg.ranges
         return pos * self.angle_increment + self.angle_min
@@ -67,6 +71,7 @@ class RobotController:
         return int((angle_in_radians - self.angle_min)/self.angle_increment)
     def get_front_laser(self):
         return self.ranges[int(len(self.ranges) / 2)]
+        
     def get_vec_sums(self):
         ranges = self.ranges
         for i in range(len(self.ranges)):
@@ -83,6 +88,15 @@ class RobotController:
         cmdTwist = Twist()
         cmdTwist.linear.x = self.get_front_laser() / self.range_max
         cmdTwist.angular.z = final_angle
+        msg = self.healthfinder_msg
+        self.center_pos_y = msg.center.position.y
+        self.size_y = msg.size.y
+        t0 = time.time()
+        if self.center_pos_y < self.size_y and -(self.time - t0) < 1.0:
+            print("center pos y: " + str(self.center_pos_y))
+            print("size y: " + str(self.size_y))
+            print(time.time() - t0)
+            cmdTwist.angular.z = self.center_pos_y / 10 * -1
         self.cmd_vel_pub.publish(cmdTwist)
     def right_wall_follow(self):
         ranges = self.ranges    # quick reference to the ranges
@@ -110,7 +124,17 @@ class RobotController:
         twist_cmd = Twist()
         twist_cmd.linear.x = speed
         twist_cmd.angular.z = max(min(angle, 1.0), -1.0)
+        msg = self.healthfinder_msg
+        self.center_pos_y = msg.center.position.y
+        self.size_y = msg.size.y
+        t0 = time.time()
+        if self.center_pos_y < self.size_y and -(self.time - t0) < 1.0:
+            print("center pos y: " + str(self.center_pos_y))
+            print("size y: " + str(self.size_y))
+            twist_cmd.angular.z = self.center_pos_y / 10 * -1
         self.cmd_vel_pub.publish(twist_cmd)
+        # print("center pos y: " + str(self.center_pos_y))
+        # print("size y: " + str(self.size_y))
         self.rate.sleep()
     def main_loop(self):
         for i in range(10):
@@ -127,10 +151,11 @@ class RobotController:
                 self.right_wall_follow()
             elif min_range > 2.0:
                 self.safe_forward()
+            
 def main(args=None):
     rospy.init_node("Controller",anonymous=True)
     robot_controller = RobotController()
-    time.sleep(1) #Sleep to allow time to initialize. Otherwise subscriber might recieve an empty message
+    time.sleep(2) #Sleep to allow time to initialize. Otherwise subscriber might recieve an empty message
     robot_controller.main_loop()
 
 if __name__ == '__main__':
